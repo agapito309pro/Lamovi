@@ -1,7 +1,7 @@
 {
   "id": "lamovie",
   "name": "LaMovie",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "apiVersion": 7,
   "entry": "plugin.js",
   "description": "Películas, Series y Animes Online en HD Gratis desde LaMovie.org",
