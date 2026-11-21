@@ -1,29 +1,57 @@
 const BASE_URL = "https://lamovie.org";
+
+// Cabeceras ultra-realistas de Chrome en Android para evitar detección de bot
 const HEADERS = {
-  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  "Referer": BASE_URL + "/",
+  "User-Agent": "Mozilla/5.0 (Linux; Android 13; SM-S908B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.144 Mobile Safari/537.36",
   "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-  "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
-  "Cache-Control": "no-cache"
+  "Accept-Language": "es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7",
+  "Referer": BASE_URL + "/",
+  "Sec-Fetch-Dest": "document",
+  "Sec-Fetch-Mode": "navigate",
+  "Sec-Fetch-Site": "none",
+  "Sec-Fetch-User": "?1",
+  "Upgrade-Insecure-Requests": "1",
+  "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+  "Sec-Ch-Ua-Mobile": "?1",
+  "Sec-Ch-Ua-Platform": '"Android"',
+  "Cache-Control": "max-age=0"
 };
 
 function log(...args) {
   try { kino.log("[LaMovie]", ...args); } catch (e) {}
 }
 
-async function fetchText(url) {
-  log("Fetching:", url);
-  const res = await kino.fetch(url, { headers: HEADERS });
-  if (!res.ok) {
-    log("HTTP Error:", res.status, url);
-    throw kino.error("unavailable", `Error ${res.status} al conectar con el servidor`);
+async function getHtml(url) {
+  log("Solicitando:", url);
+  
+  // Intentar usar cookies guardadas de sesiones anteriores (ej. cf_clearance)
+  const savedCookies = kino.cookies.get("lamovie_session") || "";
+  const headers = { ...HEADERS };
+  if (savedCookies) headers["Cookie"] = savedCookies;
+
+  const res = await kino.fetch(url, { headers });
+  
+  // Si el servidor devuelve nuevas cookies (como cf_clearance tras un desafío), guardarlas
+  const setCookie = res.headers.get("set-cookie");
+  if (setCookie && setCookie.includes("cf_clearance")) {
+    const cfMatch = setCookie.match(/cf_clearance=([^;]+)/);
+    if (cfMatch) {
+      kino.cookies.set("lamovie_session", `cf_clearance=${cfMatch[1]}`, { ttlMs: 24 * 60 * 60 * 1000 });
+      log("Cookie de Cloudflare guardada para futuras peticiones");
+    }
   }
+
+  if (!res.ok) {
+    log("Error HTTP:", res.status, url);
+    throw kino.error("unavailable", `Error del servidor (${res.status})`);
+  }
+  
   const text = await res.text();
   
-  // Detección de bloqueo Cloudflare o similar
-  if (text.includes("cloudflare") || text.includes("challenge") || text.includes("jschl") || text.length < 5000) {
-    log("Posible bloqueo Cloudflare detectado en:", url);
-    throw kino.error("geo_blocked", "El sitio está bloqueando peticiones automáticas. Intenta de nuevo más tarde o verifica tu conexión.");
+  // Detección robusta de bloqueo
+  if (text.includes("cloudflare") || text.includes("challenge") || text.includes("jschl") || text.includes("Checking your browser") || text.length < 5000) {
+    log("Bloqueo Cloudflare detectado en:", url);
+    throw kino.error("geo_blocked", "Cloudflare está bloqueando la petición. Consejo: Abre lamovie.org en el navegador de este dispositivo una vez para verificar que no eres un robot, y luego vuelve a intentar en el plugin.");
   }
   
   return text;
@@ -34,12 +62,11 @@ function decodeBase64(str) {
   catch (e) { return str; }
 }
 
-// Extrae items del HTML con múltiples patrones de fallback
 function extractItemsFromHtml(html, kind) {
   const items = [];
   const seen = new Set();
   
-  // Patrón 1: Enlaces directos con imágenes y títulos
+  // Patrón principal
   const regex1 = /<a[^>]+href=["'](https:\/\/lamovie\.org\/(?:pelicula|serie|anime)\/[^"']+)["\'][^>]*>[\s\S]*?<img[^>]+(?:data-src|src)=["']([^"']+)["\'][^>]*>(?:[\s\S]*?<h[234][^>]*>([^<]+)<\/h[234]>|[\s\S]*?title=["']([^"']+)["'])?/gi;
   let match;
   while ((match = regex1.exec(html)) !== null) {
@@ -61,7 +88,7 @@ function extractItemsFromHtml(html, kind) {
     if (items.length >= 30) break;
   }
   
-  // Patrón 2: Fallback para estructuras tipo "item" o "poster"
+  // Patrón de fallback más permisivo
   if (items.length === 0) {
     const regex2 = /href=["'](https:\/\/lamovie\.org\/(?:pelicula|serie|anime)\/[^"']+)["\'][\s\S]{0,300}?(?:data-src|src)=["']([^"']+)["\'][\s\S]{0,300}?>([^<]{3,50})</gi;
     while ((match = regex2.exec(html)) !== null) {
@@ -92,36 +119,28 @@ export async function home() {
 
   for (const cat of categories) {
     try {
-      log("Cargando categoría:", cat.title);
-      const html = await fetchText(cat.url);
+      const html = await getHtml(cat.url);
       const items = extractItemsFromHtml(html, cat.kind);
       
       if (items.length > 0) {
-        rows.push({
-          id: cat.id,
-          title: cat.title,
-          ref: cat.url,
-          items: items
-        });
-      } else {
-        log("No se encontraron items en:", cat.title);
+        rows.push({ id: cat.id, title: cat.title, ref: cat.url, items: items });
       }
     } catch (e) {
-      log("Error en categoría", cat.title, e.message);
-      // No lanzamos el error para no romper todo el Home, pero se registra
+      log("Error en", cat.title, ":", e.message);
+      // Continuamos con las demás categorías en lugar de fallar todo el Home
     }
   }
   
   if (rows.length === 0) {
-    throw kino.error("unavailable", "No se pudo cargar el contenido. El sitio podría estar bloqueando peticiones temporalmente.");
+    throw kino.error("unavailable", "No se pudo cargar el contenido. El sitio está bloqueando peticiones. Abre lamovie.org en tu navegador primero para verificar que no eres un robot.");
   }
   
   return rows;
 }
 
 export async function search(query) {
+  // Intento 1: API de WordPress (a veces no tiene protección Cloudflare)
   try {
-    // Intento 1: API de WordPress (a veces está habilitada aunque el HTML esté protegido)
     const apiUrl = BASE_URL + '/wp-json/wp/v2/posts?search=' + encodeURIComponent(query) + '&per_page=30';
     const res = await kino.fetch(apiUrl, { headers: HEADERS });
     if (res.ok) {
@@ -144,14 +163,14 @@ export async function search(query) {
   // Intento 2: Búsqueda por HTML
   try {
     const searchUrl = BASE_URL + '/?s=' + encodeURIComponent(query);
-    const html = await fetchText(searchUrl);
+    const html = await getHtml(searchUrl);
     const items = extractItemsFromHtml(html, null);
     if (items.length > 0) return items;
   } catch (e) {
     log("Búsqueda HTML falló:", e.message);
   }
 
-  throw kino.error("not_found", `No se encontraron resultados para "${query}" o el sitio bloqueó la búsqueda.`);
+  throw kino.error("not_found", `No se encontraron resultados o el sitio bloqueó la búsqueda.`);
 }
 
 export async function browse(ref, cursor) {
@@ -159,7 +178,7 @@ export async function browse(ref, cursor) {
   const url = ref.includes('?') ? (ref + '&page=' + page) : (ref + (ref.endsWith('/') ? '' : '/') + 'page/' + page + '/');
   
   try {
-    const html = await fetchText(url);
+    const html = await getHtml(url);
     const items = extractItemsFromHtml(html, null);
     
     if (items.length === 0 && page === 1) {
@@ -172,13 +191,30 @@ export async function browse(ref, cursor) {
     };
   } catch (e) {
     if (e.code) throw e;
-    throw kino.error("not_found", "No se pudieron cargar más elementos. Posible bloqueo del sitio.");
+    throw kino.error("not_found", "No se pudieron cargar más elementos.");
   }
 }
 
 export async function resolve(ref) {
   log("Resolviendo:", ref);
-  const html = await fetchText(ref);
+  let html;
+  let usedBrowserFallback = false;
+  
+  try {
+    html = await getHtml(ref);
+  } catch (e) {
+    // Fallback: Si kino.fetch es bloqueado, intentar con el navegador oculto (permitido en resolve)
+    log("kino.fetch falló, intentando kino.browser.capture...");
+    try {
+      const browserResult = await kino.browser.capture(ref, { timeoutMs: 15000 });
+      html = browserResult.html;
+      usedBrowserFallback = true;
+      log("Navegador oculto usado con éxito");
+    } catch (browserErr) {
+      log("Fallo también con navegador oculto:", browserErr.message);
+      throw kino.error("unavailable", "No se pudo acceder a la página del video.");
+    }
+  }
   
   const iframeMatch = html.match(/<iframe[^>]+src=["']([^"']+)["']/i);
   if (!iframeMatch) {
@@ -189,12 +225,11 @@ export async function resolve(ref) {
   if (playerUrl.startsWith('//')) playerUrl = 'https:' + playerUrl;
   if (!playerUrl.startsWith('http')) playerUrl = BASE_URL + playerUrl;
   
-  log("Player URL encontrado:", playerUrl);
+  log("Player URL:", playerUrl);
   
   try {
-    const playerHtml = await fetchText(playerUrl);
+    const playerHtml = await getHtml(playerUrl);
     
-    // Patrones priorizados para extraer el enlace directo (evita anuncios)
     const patterns = [
       /file:\s*["']([^"']+)["']/i,
       /sources:\s*\[\s*\{\s*file:\s*["']([^"']+)["']/i,
@@ -207,12 +242,9 @@ export async function resolve(ref) {
       const match = playerHtml.match(pattern);
       if (match && match[1]) {
         let videoUrl = match[1];
-        if (pattern.source.includes('atob')) {
-          videoUrl = decodeBase64(videoUrl);
-        }
+        if (pattern.source.includes('atob')) videoUrl = decodeBase64(videoUrl);
         if (videoUrl.startsWith('//')) videoUrl = 'https:' + videoUrl;
         
-        // Validación para evitar enlaces a scripts o banners publicitarios
         if (videoUrl.startsWith('http') && !videoUrl.includes('ad.') && !videoUrl.includes('banner') && !videoUrl.includes('tracking')) {
           log("Video directo encontrado:", videoUrl);
           return {
@@ -224,16 +256,11 @@ export async function resolve(ref) {
       }
     }
     
-    // Fallback: Si es un host conocido, dejar que Kino lo maneje
     const supportedHosts = ['voe.sx', 'streamtape.com', 'doodstream.com', 'fembed.com', 'ok.ru', 'mega.nz', 'mediafire.com'];
-    const isSupported = supportedHosts.some(host => playerUrl.includes(host));
-    
-    if (isSupported) {
-      log("Usando host soportado:", playerUrl);
+    if (supportedHosts.some(host => playerUrl.includes(host))) {
       return { url: playerUrl, mime: 'video/html', headers: HEADERS };
     }
     
-    log("Devolviendo URL del player como fallback:", playerUrl);
     return { url: playerUrl, mime: 'video/html', headers: HEADERS };
     
   } catch (e) {
