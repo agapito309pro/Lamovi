@@ -1,0 +1,30 @@
+{
+  "id": "lamovie",
+  "name": "LaMovie",
+  "version": "1.0.0",
+  "apiVersion": 7,
+  "entry": "plugin.js",
+  "description": "Películas, Series y Animes Online en HD Gratis desde LaMovie.org",
+  "author": "Hotaru Yume",
+  "creator": "hotaruyume",
+  "homepage": "https://github.com/hotaruyume/kino-plugin-lamovie",
+  "hosts": [
+    "lamovie.org",
+    "*.lamovie.org",
+    "voe.sx",
+    "streamtape.com",
+    "doodstream.com",
+    "fembed.com",
+    "ok.ru",
+    "mega.nz",
+    "mediafire.com"
+  ],
+  "capabilities": [
+    "search",
+    "home",
+    "browse",
+    "resolve"
+  ],
+  "color": "#0F1928",
+  "icon": "icon.png"
+}
