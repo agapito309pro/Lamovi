@@ -1,6 +1,6 @@
 /// <reference path="./kino.d.ts" />
 /**
- * PornHD3x — Kino plugin v1.0.0
+ * PornHD3x — Kino plugin v1.0.1
  * Author: Hotaru Yume / hotaruyume
  * Fuente: www9.pornhd3x.tv (y mirrors pornhd3x.tv)
  * - Full-length HD de estudios (Brazzers, NA, Vixen…)
@@ -10,7 +10,7 @@
  */
 
 const BASE = "https://www9.pornhd3x.tv";
-const SALT = "x6a4moj7q8xq6dk5";
+const SALT = "98126avrbi6m49vd7shxkn985";
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 const HOME_ROW = 12;
@@ -19,6 +19,8 @@ const MAX_PAGES = 50;
 
 const AD_RE =
   /trafficjunky|exoclick|juicyads|popunder|tsyndicate|doubleclick|googlesyndication|ad[-_]?server|banner[-_]?ad/i;
+const AD_PLAYLIST_RE =
+  /u8lmahqjne\.m3u8|underpetticoated\.m3u8|e6f4d9e9-dede-4eea-ae97-6e6c8d036eb4\.m3u8/i;
 const GAY_TRANS_RE =
   /\b(gay|shemale|trans(?:sexual|gender)?|ladyboy|femboy|trap)\b/i;
 
@@ -475,13 +477,12 @@ export async function home() {
   }
 
   await row("latest", "Recientes", "/premium-porn-hd/page-1");
-  await row("brazzers", "Brazzers", "/brazzers");
-  await row("naughtyamerica", "Naughty America", "/naughtyamerica");
-  await row("vixen", "Vixen", "/vixen");
-  await row("realitykings", "Reality Kings", "/realitykings");
-  await row("blacked", "Blacked", "/blacked");
-  await row("jav", "JAV HD", "/javhd");
-  await row("asian", "Asian Sex Diary", "/asiansexdiary");
+  await row("home", "Destacados", "/");
+  await row("brazzers", "Brazzers", "/studio/brazzers");
+  await row("naughtyamerica", "Naughty America", "/studio/naughtyamerica");
+  await row("realitykings", "Reality Kings", "/studio/realitykings");
+  await row("blacked", "Blacked", "/studio/blacked");
+  await row("cat-brazzers", "Categoría Brazzers", "/category/brazzers");
 
   return rows;
 }
@@ -538,22 +539,25 @@ export async function resolve(ref) {
   var urls = [];
   var labels = [];
 
-  // 1) Try get_sources with several hash candidates
+  // 1) Hash real: md5(token + nonce + salt) + cookie del sitio
   if (token) {
-    var candidates = [];
+    function randomNonce() {
+      var alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+      var s = "";
+      for (var n = 0; n < 6; n++)
+        s += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+      return s;
+    }
+    var nonce = randomNonce();
+    var hash = "";
     try {
-      candidates.push(await md5Hex(token + SALT));
-      candidates.push(await md5Hex(SALT + token));
-      candidates.push(await md5Hex(token));
-      candidates.push(await md5Hex(token + "8"));
-      candidates.push(await md5Hex("8" + token));
-      candidates.push(await md5Hex(token + "1"));
-      candidates.push(await md5Hex(token + "HD"));
+      hash = await md5Hex(token + nonce + SALT);
     } catch (e) {}
+    var cookieName =
+      "826avrbi6m49vd7shxkn985m" + token + "k06twz87wwxtp3dqiicks2df";
+    var cookieHeader = cookieName + "=" + nonce;
 
-    for (var i = 0; i < candidates.length; i++) {
-      var hash = candidates[i];
-      if (!hash) continue;
+    for (var count = 1; count <= 5 && hash; count++) {
       try {
         var srcUrl =
           BASE +
@@ -561,19 +565,30 @@ export async function resolve(ref) {
           encodeURIComponent(token) +
           "/" +
           hash +
-          "?count=1&mobile=true";
-        var data = await fetchJson(srcUrl, { Referer: pageUrl });
+          "?count=" +
+          count +
+          "&mobile=true";
+        var data = await fetchJson(srcUrl, {
+          Referer: pageUrl,
+          Cookie: cookieHeader,
+        });
         var found = extractSourcesFromPayload(data);
         for (var f = 0; f < found.length; f++) {
+          // Saltar playlists de anuncios conocidas
+          if (
+            typeof AD_PLAYLIST_RE !== "undefined" &&
+            AD_PLAYLIST_RE.test(found[f])
+          )
+            continue;
+          if (/u8lmahqjne|underpetticoated|e6f4d9e9-dede/i.test(found[f]))
+            continue;
           if (urls.indexOf(found[f]) < 0) {
             urls.push(found[f]);
             labels.push("Direct HLS");
           }
         }
         if (urls.length) break;
-      } catch (e) {
-        // try next hash
-      }
+      } catch (e) {}
     }
   }
 
@@ -608,6 +623,20 @@ export async function resolve(ref) {
     ) {
       embeds.push(emb);
     }
+  }
+
+    // Filtrar anuncios residuales
+  urls = urls.filter(function (u) {
+    return (
+      u &&
+      !/u8lmahqjne|underpetticoated|e6f4d9e9-dede|tsyndicate/i.test(u)
+    );
+  });
+  if (!urls.length) {
+    throw kino.error(
+      "no_stream",
+      "El sitio solo devolvió streams de anuncios. No hay vídeo real para este título."
+    );
   }
 
   // Prefer direct HLS/MP4

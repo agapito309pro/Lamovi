@@ -1,10 +1,10 @@
 {
   "id": "pornhd3x",
   "name": "PornHD3x",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "apiVersion": 6,
   "entry": "plugin.js",
-  "description": "Vídeos HD full-length de PornHD3x.tv: Brazzers, Naughty America, Vixen y más. HLS prioritario, búsqueda y secciones de inicio.",
+  "description": "Vídeos HD full-length de PornHD3x.tv: Brazzers, Naughty America y más. Rechaza streams de anuncios. Búsqueda y secciones de estudio.",
   "author": "Hotaru Yume",
   "creator": "hotaruyume",
   "homepage": "https://www9.pornhd3x.tv",
@@ -16,32 +16,13 @@
     "cdnamz.me",
     "*.cdnamz.me",
     "cdn-aws-t11.cdnamz.me",
+    "cdn-aws-exp.cdnamz.me",
     "project1content.com",
-    "*.project1content.com",
-    "media-public-ht.project1content.com",
-    "doodstream.com",
-    "*.doodstream.com",
-    "dood.watch",
-    "*.dood.watch",
-    "lulustream.com",
-    "*.lulustream.com",
-    "luluvid.com",
-    "*.luluvid.com",
-    "streamtape.com",
-    "*.streamtape.com",
-    "voe.sx",
-    "*.voe.sx"
+    "*.project1content.com"
   ],
   "streamHosts": "any",
-  "capabilities": [
-    "search",
-    "home",
-    "browse",
-    "resolve"
-  ],
-  "categories": [
-    "movies"
-  ],
+  "capabilities": ["search", "home", "browse", "resolve"],
+  "categories": ["movies"],
   "color": "#FF1493",
   "icon": "icon.png",
   "theme": {
