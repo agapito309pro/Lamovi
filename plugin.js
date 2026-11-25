@@ -1,9 +1,10 @@
 /// <reference path="./kino.d.ts" />
 /**
- * Javtiful — Kino plugin v1.0.0
+ * Javtiful — Kino plugin v1.0.1
  * Author: Hotaru Yume / hotaruyume
  * Fuente: javtiful.com
- * - Listados HTML (video-card): recientes, uncensored, popular, categorías
+ * - Listados HTML (video-card): recientes, uncensored, reducing mosaic, school girls, popular
+ * - categories: adult (solo visible con control parental desactivado)
  * - Búsqueda /search?q=
  * - Resolve: ticket de la página → POST /video/{id}/playback (cookies) → MP4 firmado
  * - Evita cards partner/script (ads)
@@ -25,6 +26,8 @@ const AD_RE =
 const SECTIONS = [
   { id: "latest", title: "Recientes", path: "/videos?sort=latest" },
   { id: "uncensored", title: "Uncensored", path: "/uncensored" },
+  { id: "reducing-mosaic", title: "Reducing Mosaic", path: "/reducing-mosaic" },
+  { id: "school-girls", title: "School Girls", path: "/category/school-girls" },
   { id: "popular-week", title: "Popular esta semana", path: "/videos?sort=popular_week" },
   { id: "most-viewed", title: "Más vistos", path: "/videos?sort=most_viewed" },
   { id: "big-tits", title: "Big Tits", path: "/category/big-tits" },

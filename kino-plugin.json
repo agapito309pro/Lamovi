@@ -1,10 +1,10 @@
 {
   "id": "javtiful",
   "name": "Javtiful",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "apiVersion": 6,
   "entry": "plugin.js",
-  "description": "Vídeos JAV HD de javtiful.com. Recientes, Uncensored, categorías y búsqueda. MP4 progresivo multi-calidad (teléfono y TV).",
+  "description": "Vídeos JAV HD de javtiful.com (solo adultos). Recientes, Uncensored, Reducing Mosaic, School Girls y más. MP4 progresivo (teléfono y TV).",
   "author": "Hotaru Yume",
   "creator": "hotaruyume",
   "homepage": "https://javtiful.com",
@@ -26,7 +26,7 @@
     "resolve"
   ],
   "categories": [
-    "movies"
+    "adult"
   ],
   "color": "#E91E63",
   "icon": "icon.png",
